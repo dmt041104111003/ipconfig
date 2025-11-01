@@ -6,6 +6,7 @@ const execPromise = util.promisify(exec);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+app.use(express.json());
 app.set('trust proxy', true);
 
 async function getWifiInfo() {
@@ -219,9 +220,13 @@ app.get('/', async (req, res) => {
   try {
     const wifiInfo = await getWifiInfo();
     res.json({
-      message: 'API Kiểm tra thông tin WiFi',
-      endpoint: 'GET /api/wifi-ip - Lấy thông tin WiFi đầy đủ',
-      wifi: wifiInfo
+      message: 'API Kiểm tra thông tin WiFi từ tất cả thiết bị',
+      endpoints: {
+        'GET /api/wifi-ip': 'Lấy thông tin WiFi của server (nếu server có WiFi)',
+        'POST /api/wifi-ip': 'Client gửi thông tin WiFi của thiết bị (body: {ssid, bssid, ip, linkLocalIPv6})'
+      },
+      serverWifi: wifiInfo,
+      note: 'Trên server cloud không có WiFi adapter. Client cần tự lấy và gửi lên qua POST.'
     });
   } catch (error) {
     res.status(500).json({
@@ -242,6 +247,35 @@ app.get('/api/wifi-ip', async (req, res) => {
         bssid: wifiInfo.bssid || wifiInfo.mac || 'N/A',
         ip: wifiInfo.ip || 'N/A',
         linkLocalIPv6: wifiInfo.linkLocalIPv6 || 'N/A'
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+app.post('/api/wifi-ip', async (req, res) => {
+  try {
+    const { ssid, bssid, ip, linkLocalIPv6 } = req.body;
+    const clientIP = req.ip || 
+                     req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+                     req.headers['x-real-ip'] ||
+                     req.connection.remoteAddress ||
+                     'unknown';
+    
+    res.json({
+      success: true,
+      message: 'Đã nhận thông tin WiFi từ thiết bị',
+      data: {
+        ssid: ssid || 'N/A',
+        bssid: bssid || 'N/A',
+        ip: ip || 'N/A',
+        linkLocalIPv6: linkLocalIPv6 || 'N/A',
+        clientIP: clientIP,
+        timestamp: new Date().toISOString()
       }
     });
   } catch (error) {
